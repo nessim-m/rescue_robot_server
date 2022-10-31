@@ -52,7 +52,7 @@
 # if __name__ == '__main__':
 #     app.run(host='0.0.0.0', threaded=True)
 
-# ----------------------------------------------------------------------------------
+# ----------------------------------NEW SERVER------------------------------------------------
 
 
 import random
@@ -73,73 +73,6 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind(ADDR)
 
 
-def start():
-    server.listen()
-    print(f"[LISTENING] Server is listening on {HOST}")
-    while True:
-        conn, addr = server.accept()
-        thread_count = threading.active_count() - 1
-        if thread_count == 0:
-            thread = threading.Thread(target=handle_robot_status_client, args=(conn, addr))
-            thread.start()
-        elif thread_count == 1:
-            thread = threading.Thread(target=handle_robot_distance_client, args=(conn, addr))
-            thread.start()
-
-        print(f"[ACTIVE CONNECTIONS] {threading.activeCount() - 1}")
-
-
-def get_cpu_use():
-    """ Return CPU usage using psutil"""
-    cpu_cent = psutil.cpu_percent()
-    return str(cpu_cent)
-
-
-def get_cpu_temp_func():
-    """ Return CPU temperature """
-    result = 0
-    mypath = "/sys/class/thermal/thermal_zone0/temp"
-    with open(mypath, 'r') as mytmpfile:
-        for line in mytmpfile:
-            result = line
-
-    result = float(result) / 1000
-    result = round(result, 1)
-    return str(result)
-
-
-def get_ram_info():
-    """ Return RAM usage using psutil """
-    ram_cent = psutil.virtual_memory()[2]
-    return str(ram_cent)
-
-
-print("[STARTING] server is starting...")
-start()
-
-
-def gen(camera):
-    while True:
-        frame = camera.get_frame()
-
-        yield (b'--frame\r\n'
-
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-
-
-@app.route('/')
-def video_feed():
-    return Response(gen(Camera()),
-
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
-
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', threaded=True)
-
-
-
-
 # THREAD 1
 def handle_robot_status_client(conn, addr):
     print(f"[ROBOT STATUS CLIENT] {addr} connected.")
@@ -151,9 +84,9 @@ def handle_robot_status_client(conn, addr):
             msg_length = int(msg_length)
             msg = conn.recv(msg_length).decode(FORMAT)
             print(f"[{addr}] {msg}")
-            conn.send(b"Ready")
-            if 'start' in dataFromClient:
-                app = Flask(__name__)
+            if 'On' in msg:
+                # ...START THE CAMERA
+                conn.send(b"Ready")
         else:
             connected = False
 
@@ -209,3 +142,55 @@ def handle_robot_ram_usage_client(conn, addr):
 
     conn.close()
 
+
+def start():
+    server.listen()
+    print(f"[LISTENING] Server is listening on {HOST}")
+    while True:
+        conn, addr = server.accept()
+        thread_count = threading.active_count() - 1
+        if thread_count == 0:
+            thread = threading.Thread(target=handle_robot_status_client, args=(conn, addr))
+            thread.start()
+        elif thread_count == 1:
+            thread = threading.Thread(target=handle_robot_distance_client, args=(conn, addr))
+            thread.start()
+        elif thread_count == 2:
+            thread = threading.Thread(target=handle_robot_cpu_temp_client, args=(conn, addr))
+            thread.start()
+        elif thread_count == 3:
+            thread = threading.Thread(target=handle_robot_cpu_usage_client, args=(conn, addr))
+            thread.start()
+        elif thread_count == 4:
+            thread = threading.Thread(target=handle_robot_ram_usage_client, args=(conn, addr))
+            thread.start()
+        print(f"[ACTIVE CONNECTIONS] {threading.activeCount() - 1}")
+
+
+def get_cpu_use():
+    """ Return CPU usage using psutil"""
+    cpu_cent = psutil.cpu_percent()
+    return str(cpu_cent)
+
+
+def get_cpu_temp_func():
+    """ Return CPU temperature """
+    result = 0
+    mypath = "/sys/class/thermal/thermal_zone0/temp"
+    with open(mypath, 'r') as mytmpfile:
+        for line in mytmpfile:
+            result = line
+
+    result = float(result) / 1000
+    result = round(result, 1)
+    return str(result)
+
+
+def get_ram_info():
+    """ Return RAM usage using psutil """
+    ram_cent = psutil.virtual_memory()[2]
+    return str(ram_cent)
+
+
+print("[STARTING] server is starting...")
+start()
